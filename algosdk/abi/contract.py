@@ -22,13 +22,16 @@ class Contract:
         methods: List[Method],
         desc: str = None,
         networks: Dict[str, "NetworkInfo"] = None,
+        canonical: bool = False,
     ) -> None:
         self.name = name
         self.methods = methods
         self.desc = desc
         self.networks = networks if networks else {}
+        self.canonical = canonical
 
     def __eq__(self, o: object) -> bool:
+        """TODO: this is a very weak notion of equality. Does it make sense to keep it?"""
         if not isinstance(o, Contract):
             return False
         return (
@@ -44,12 +47,39 @@ class Contract:
         return Contract.undictify(d)
 
     def dictify(self) -> dict:
-        d = {}
+        d: dict = {}
         d["name"] = self.name
-        d["methods"] = [m.dictify() for m in self.methods]
+        meths = (
+            [m.canonicalized() for m in self.methods]
+            if self.canonical
+            else self.methods
+        )
+        d["methods"] = [m.dictify() for m in meths]
         d["networks"] = {k: v.dictify() for k, v in self.networks.items()}
         if self.desc is not None:
             d["desc"] = self.desc
+
+        if self.canonical:
+            d["methods"]
+
+            def method_sort(methods):
+                return sorted(
+                    methods,
+                    key=lambda meth: (
+                        meth["name"],
+                        tuple(a["type"] for a in meth["args"]),
+                    ),
+                )
+
+            d = {
+                "name": d["name"],
+                "desc": d.get("desc"),
+                "methods": method_sort(d["methods"]),
+                "networks": d["networks"],
+            }
+            if d["desc"] is None:
+                del d["desc"]
+
         return d
 
     @staticmethod
@@ -60,9 +90,7 @@ class Contract:
         networks = d["networks"] if "networks" in d else {}
         for k, v in networks.items():
             networks[k] = NetworkInfo.undictify(v)
-        return Contract(
-            name=name, desc=desc, networks=networks, methods=method_list
-        )
+        return Contract(name=name, desc=desc, networks=networks, methods=method_list)
 
     def get_method_by_name(self, name: str) -> Method:
         return get_method_by_name(self.methods, name)

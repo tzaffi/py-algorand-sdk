@@ -1,3 +1,4 @@
+import copy
 import json
 from typing import List, Union
 
@@ -24,6 +25,7 @@ class Method:
         args: List["Argument"],
         returns: "Returns",
         desc: str = None,
+        canonical: bool = False,
     ) -> None:
         self.name = name
         self.args = args
@@ -36,6 +38,11 @@ class Method:
             if abi.is_abi_transaction_type(arg.type):
                 txn_count += 1
         self.txn_calls = txn_count
+
+    def canonicalized(self) -> "Method":
+        m = copy.deepcopy(self)
+        m.canonical = True
+        return m
 
     def __eq__(self, o: object) -> bool:
         if not isinstance(o, Method):
@@ -102,9 +109,7 @@ class Method:
         # the second token should be the arguments as a tuple,
         # and the last token should be the return type (or void).
         tokens = Method._parse_string(s)
-        argument_list = [
-            Argument(t) for t in abi.TupleType._parse_tuple(tokens[1])
-        ]
+        argument_list = [Argument(t) for t in abi.TupleType._parse_tuple(tokens[1])]
         return_type = Returns(tokens[-1])
         return Method(name=tokens[0], args=argument_list, returns=return_type)
 
@@ -115,6 +120,16 @@ class Method:
         d["returns"] = self.returns.dictify()
         if self.desc:
             d["desc"] = self.desc
+
+        if self.canonical:
+            d = {
+                "name": d["name"],
+                "desc": d.get("desc"),
+                "args": d["args"],
+                "returns": d["returns"],
+            }
+            if d["desc"] is None:
+                del d["desc"]
         return d
 
     @staticmethod
@@ -133,9 +148,7 @@ def get_method_by_name(methods: List[Method], name: str) -> Method:
         raise KeyError(
             "found {} methods with the same name {}".format(
                 len(methods_filtered),
-                ",".join(
-                    [method.get_signature() for method in methods_filtered]
-                ),
+                ",".join([method.get_signature() for method in methods_filtered]),
             )
         )
 
@@ -155,12 +168,8 @@ class Argument:
         desc (string, optional): description of this method argument
     """
 
-    def __init__(
-        self, arg_type: str, name: str = None, desc: str = None
-    ) -> None:
-        if abi.is_abi_transaction_type(arg_type) or abi.is_abi_reference_type(
-            arg_type
-        ):
+    def __init__(self, arg_type: str, name: str = None, desc: str = None) -> None:
+        if abi.is_abi_transaction_type(arg_type) or abi.is_abi_reference_type(arg_type):
             self.type = arg_type
         else:
             # If the type cannot be parsed into an ABI type, it will error
@@ -171,9 +180,7 @@ class Argument:
     def __eq__(self, o: object) -> bool:
         if not isinstance(o, Argument):
             return False
-        return (
-            self.name == o.name and self.type == o.type and self.desc == o.desc
-        )
+        return self.name == o.name and self.type == o.type and self.desc == o.desc
 
     def __str__(self) -> str:
         return str(self.type)
@@ -233,6 +240,4 @@ class Returns:
 
     @staticmethod
     def undictify(d: dict) -> "Returns":
-        return Returns(
-            arg_type=d["type"], desc=d["desc"] if "desc" in d else None
-        )
+        return Returns(arg_type=d["type"], desc=d["desc"] if "desc" in d else None)
