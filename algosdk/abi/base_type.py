@@ -55,6 +55,13 @@ class ABIType(ABC):
         """
         pass
 
+    def dictify(self) -> dict:
+        return {
+            k: a
+            for k in dir(self)
+            if not k.startswith("_") and not callable(a := getattr(self, k))
+        }
+
     @staticmethod
     def from_string(s: str) -> "ABIType":
         """
