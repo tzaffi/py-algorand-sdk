@@ -1,7 +1,8 @@
+from collections import Counter
 import json
 from typing import Dict, List, Union
 
-from algosdk.abi.method import Method, get_method_by_name
+from algosdk.abi.method import Method, get_method_by_name, _differ, _ldiffer
 
 
 class Contract:
@@ -40,6 +41,51 @@ class Contract:
             and self.desc == o.desc
             and self.networks == o.networks
         )
+
+    def _has_overloaded_methods(self):
+        method_count = Counter(m["name"] for m in self.dictify()["methods"])
+        if not method_count:
+            return False
+
+        return method_count.most_common(1)[0][1] > 1
+
+    def __xor__(self, other: "Contract") -> dict | None:
+        assert isinstance(
+            other, Contract
+        ), f"cannot take diff of Contract with {type(other)}"
+
+        if self == other:
+            return None
+
+        meth_diff = None
+        if self.methods != other.methods:
+            if (
+                self._has_overloaded_methods()
+                or other._has_overloaded_methods()
+            ):
+                # TODO: have a more nuanced approach to diffing when have overloaded methods
+                meth_diff = (
+                    self.dictify()["methods"],
+                    other.dictify()["methods"],
+                )
+
+            else:
+                sdict = {m.name: m for m in self.methods}
+                odict = {m.name: m for m in other.methods}
+                s_only = sorted(sdict.keys() - odict.keys())
+                both = sorted(sdict.keys() & odict.keys())
+                o_only = sorted(odict.keys() - sdict.keys())
+
+                meth_diff = [sdict[m] ^ odict[m] for m in both]
+                meth_diff += [(sdict[m].dictify(), None) for m in s_only]
+                meth_diff += [(None, odict[m].dictify()) for m in o_only]
+
+        return {
+            "name": _differ(self.name, other.name),
+            "desc": _differ(self.desc, other.desc),
+            "methods": meth_diff,
+            "networks": _differ(self.networks, other.networks),
+        }
 
     @staticmethod
     def from_json(resp: Union[str, bytes, bytearray]) -> "Contract":
@@ -90,7 +136,9 @@ class Contract:
         networks = d["networks"] if "networks" in d else {}
         for k, v in networks.items():
             networks[k] = NetworkInfo.undictify(v)
-        return Contract(name=name, desc=desc, networks=networks, methods=method_list)
+        return Contract(
+            name=name, desc=desc, networks=networks, methods=method_list
+        )
 
     def get_method_by_name(self, name: str) -> Method:
         return get_method_by_name(self.methods, name)
