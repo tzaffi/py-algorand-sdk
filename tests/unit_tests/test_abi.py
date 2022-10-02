@@ -802,7 +802,7 @@ class TestABIInteraction(unittest.TestCase):
                         "desc": None,
                         "args": [
                             {
-                                "type": ({"bit_size": 64}, {"bit_size": 8}),
+                                "type": ("uint64", "uint8"),
                                 "name": None,
                                 "desc": None,
                             },

@@ -55,11 +55,11 @@ def _ddiffer(xs, ys):
     common_keys = xs.keys() & ys.keys()
     y_only_keys = ys.keys() - xs.keys()
 
-    diff = {k: _differ(xs[k], ys[k]) for k in common_keys}
+    diff = {k: xs[k] ^ ys[k] for k in common_keys}
     for k in x_only_keys:
-        diff[k] = (xs[k], None)
+        diff[k] = (_dict_if_can(xs[k]), None)
     for k in y_only_keys:
-        diff[k] = (None, ys[k])
+        diff[k] = (None, _dict_if_can(ys[k]))
 
     return diff
 
@@ -276,7 +276,7 @@ class Argument:
             None
             if self == other
             else {
-                "type": _differ(self.type, other.type),
+                "type": _differ(str(self.type), str(other.type)),
                 "name": _differ(self.name, other.name),
                 "desc": _differ(self.desc, other.desc),
             }
