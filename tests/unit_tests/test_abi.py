@@ -798,7 +798,7 @@ class TestABIInteraction(unittest.TestCase):
                 "desc": None,
                 "methods": [
                     {
-                        "name": None,
+                        "name": "add",
                         "desc": None,
                         "args": [
                             {

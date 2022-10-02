@@ -2,7 +2,12 @@ from collections import Counter
 import json
 from typing import Dict, List, Union
 
-from algosdk.abi.method import Method, get_method_by_name, _differ, _ldiffer
+from algosdk.abi.method import (
+    Method,
+    get_method_by_name,
+    _differ,
+    _ddiffer,
+)
 
 
 class Contract:
@@ -21,8 +26,8 @@ class Contract:
         self,
         name: str,
         methods: List[Method],
-        desc: str = None,
-        networks: Dict[str, "NetworkInfo"] = None,
+        desc: str | None = None,
+        networks: Dict[str, "NetworkInfo"] | None = None,
         canonical: bool = False,
     ) -> None:
         self.name = name
@@ -84,7 +89,7 @@ class Contract:
             "name": _differ(self.name, other.name),
             "desc": _differ(self.desc, other.desc),
             "methods": meth_diff,
-            "networks": _differ(self.networks, other.networks),
+            "networks": _ddiffer(self.networks, other.networks),
         }
 
     @staticmethod
@@ -159,6 +164,18 @@ class NetworkInfo:
         if not isinstance(o, NetworkInfo):
             return False
         return self.app_id == o.app_id
+
+    def __xor__(self, other: "NetworkInfo") -> dict | None:
+        assert isinstance(
+            other, NetworkInfo
+        ), f"cannot take diff of NetworkInfo with {type(other)}"
+
+        if self == other:
+            return None
+
+        return {
+            "appID": _differ(self.app_id, other.app_id),
+        }
 
     def dictify(self) -> dict:
         return {"appID": self.app_id}

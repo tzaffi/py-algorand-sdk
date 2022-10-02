@@ -17,11 +17,24 @@ def _mdifc(xs):
     return list(map(_dict_if_can, xs))
 
 
-def _differ(x, y):
-    return None if x == y else (_dict_if_can(x), _dict_if_can(y))
+def _differ(x, y, dont_erase=False):
+    return (
+        _dict_if_can(x)
+        if dont_erase
+        else None
+        if x == y
+        else (_dict_if_can(x), _dict_if_can(y))
+    )
+
+
+def _type_assertion(o: object, name: str, t: type):
+    assert isinstance(o, t), f"{name} only defined for {t} but got {type(o)}"
 
 
 def _ldiffer(xs, ys):
+    _type_assertion(xs, "xs", list)
+    _type_assertion(ys, "ys", list)
+
     if xs == ys:
         return None
 
@@ -29,6 +42,26 @@ def _ldiffer(xs, ys):
         return [x ^ ys[i] for i, x in enumerate(xs)]
 
     return (_mdifc(xs), _mdifc(ys))
+
+
+def _ddiffer(xs, ys):
+    _type_assertion(xs, "xs", dict)
+    _type_assertion(ys, "ys", dict)
+
+    if xs == ys:
+        return None
+
+    x_only_keys = xs.keys() - ys.keys()
+    common_keys = xs.keys() & ys.keys()
+    y_only_keys = ys.keys() - xs.keys()
+
+    diff = {k: _differ(xs[k], ys[k]) for k in common_keys}
+    for k in x_only_keys:
+        diff[k] = (xs[k], None)
+    for k in y_only_keys:
+        diff[k] = (None, ys[k])
+
+    return diff
 
 
 class Method:
@@ -89,7 +122,7 @@ class Method:
             None
             if self == other
             else {
-                "name": _differ(self.name, other.name),
+                "name": _differ(self.name, other.name, dont_erase=True),
                 "desc": _differ(self.desc, other.desc),
                 "args": _ldiffer(self.args, other.args),
                 "returns": self.returns ^ other.returns,
@@ -215,7 +248,7 @@ class Argument:
     """
 
     def __init__(
-        self, arg_type: str, name: str = None, desc: str = None
+        self, arg_type: str, name: str | None = None, desc: str | None = None
     ) -> None:
         if abi.is_abi_transaction_type(arg_type) or abi.is_abi_reference_type(
             arg_type
@@ -282,7 +315,7 @@ class Returns:
     # Represents a void return.
     VOID = "void"
 
-    def __init__(self, arg_type: str, desc: str = None) -> None:
+    def __init__(self, arg_type: str, desc: str | None = None) -> None:
         if arg_type == "void":
             self.type = self.VOID
         else:
