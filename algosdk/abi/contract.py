@@ -92,6 +92,29 @@ class Contract:
             "networks": _ddiffer(self.networks, other.networks),
         }
 
+    def equivalent(self, other: "Contract") -> bool:
+        if not isinstance(other, Contract):
+            return False
+
+        diff = self ^ other
+        if not diff:
+            return True
+
+        if diff["methods"]:
+            if len(self.methods) != len(other.methods):
+                return False
+            smethods = sorted(self.methods, key=lambda m: m.name)
+            omethods = sorted(other.methods, key=lambda m: m.name)
+            if any(
+                map(
+                    lambda x: not x[0].equivalent(x[1]),
+                    zip(smethods, omethods),
+                )
+            ):
+                return False
+
+        return not diff["networks"]
+
     @staticmethod
     def from_json(resp: Union[str, bytes, bytearray]) -> "Contract":
         d = json.loads(resp)

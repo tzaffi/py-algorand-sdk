@@ -4,7 +4,7 @@ from typing import List, Union
 
 from Cryptodome.Hash import SHA512
 
-from algosdk import abi, constants, error
+from algosdk import abi, error
 
 
 def _dict_if_can(x):
@@ -129,6 +129,29 @@ class Method:
                 "txn_calls": _differ(self.txn_calls, other.txn_calls),
             }
         )
+
+    def equivalent(self, other: "Method") -> bool:
+        if not isinstance(other, Method):
+            return False
+
+        diff = self ^ other
+        if not diff:
+            return True
+
+        if diff["returns"] or diff["txn_calls"]:
+            return False
+
+        if not isinstance(diff["name"], str):
+            return False
+
+        if len(self.args) != len(other.args):
+            return False
+
+        for i, arg in enumerate(self.args):
+            if not arg.equivalent(other.args[i]):
+                return False
+
+        return True
 
     def get_signature(self) -> str:
         arg_string = ",".join(str(arg.type) for arg in self.args)
@@ -282,6 +305,12 @@ class Argument:
             }
         )
 
+    def equivalent(self, other: "Argument") -> bool:
+        if not isinstance(other, Argument):
+            return False
+
+        return str(self.type) == str(other.type)
+
     def __str__(self) -> str:
         return str(self.type)
 
@@ -341,6 +370,12 @@ class Returns:
                 "desc": _differ(self.desc, other.desc),
             }
         )
+
+    def equivalent(self, other: "Returns") -> bool:
+        if not isinstance(other, Returns):
+            return False
+
+        return str(self.type) == str(other.type)
 
     def __str__(self) -> str:
         return str(self.type)
