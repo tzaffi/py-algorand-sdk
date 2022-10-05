@@ -1,9 +1,67 @@
+import copy
 import json
 from typing import List, Union
 
 from Cryptodome.Hash import SHA512
 
-from algosdk import abi, constants, error
+from algosdk import abi, error
+
+
+def _dict_if_can(x):
+    if hasattr(x, "dictify"):
+        return x.dictify()
+    return x
+
+
+def _mdifc(xs):
+    return list(map(_dict_if_can, xs))
+
+
+def _differ(x, y, dont_erase=False):
+    return (
+        _dict_if_can(x)
+        if dont_erase
+        else None
+        if x == y
+        else (_dict_if_can(x), _dict_if_can(y))
+    )
+
+
+def _type_assertion(o: object, name: str, t: type):
+    assert isinstance(o, t), f"{name} only defined for {t} but got {type(o)}"
+
+
+def _ldiffer(xs, ys):
+    _type_assertion(xs, "xs", list)
+    _type_assertion(ys, "ys", list)
+
+    if xs == ys:
+        return None
+
+    if len(xs) == len(ys):
+        return [x ^ ys[i] for i, x in enumerate(xs)]
+
+    return (_mdifc(xs), _mdifc(ys))
+
+
+def _ddiffer(xs, ys):
+    _type_assertion(xs, "xs", dict)
+    _type_assertion(ys, "ys", dict)
+
+    if xs == ys:
+        return None
+
+    x_only_keys = xs.keys() - ys.keys()
+    common_keys = xs.keys() & ys.keys()
+    y_only_keys = ys.keys() - xs.keys()
+
+    diff = {k: xs[k] ^ ys[k] for k in common_keys}
+    for k in x_only_keys:
+        diff[k] = (_dict_if_can(xs[k]), None)
+    for k in y_only_keys:
+        diff[k] = (None, _dict_if_can(ys[k]))
+
+    return diff
 
 
 class Method:
@@ -23,7 +81,8 @@ class Method:
         name: str,
         args: List["Argument"],
         returns: "Returns",
-        desc: str = None,
+        desc: str | None = None,
+        canonical: bool = False,
     ) -> None:
         self.name = name
         self.args = args
@@ -36,6 +95,12 @@ class Method:
             if abi.is_abi_transaction_type(arg.type):
                 txn_count += 1
         self.txn_calls = txn_count
+        self.canonical = canonical
+
+    def canonicalized(self) -> "Method":
+        m = copy.deepcopy(self)
+        m.canonical = True
+        return m
 
     def __eq__(self, o: object) -> bool:
         if not isinstance(o, Method):
@@ -47,6 +112,46 @@ class Method:
             and self.desc == o.desc
             and self.txn_calls == o.txn_calls
         )
+
+    def __xor__(self, other: "Method") -> dict | None:
+        assert isinstance(
+            other, Method
+        ), f"cannot take diff of Method with {type(other)}"
+
+        return (
+            None
+            if self == other
+            else {
+                "name": _differ(self.name, other.name, dont_erase=True),
+                "desc": _differ(self.desc, other.desc),
+                "args": _ldiffer(self.args, other.args),
+                "returns": self.returns ^ other.returns,
+                "txn_calls": _differ(self.txn_calls, other.txn_calls),
+            }
+        )
+
+    def equivalent(self, other: "Method") -> bool:
+        if not isinstance(other, Method):
+            return False
+
+        diff = self ^ other
+        if not diff:
+            return True
+
+        if diff["returns"] or diff["txn_calls"]:
+            return False
+
+        if not isinstance(diff["name"], str):
+            return False
+
+        if len(self.args) != len(other.args):
+            return False
+
+        for i, arg in enumerate(self.args):
+            if not arg.equivalent(other.args[i]):
+                return False
+
+        return True
 
     def get_signature(self) -> str:
         arg_string = ",".join(str(arg.type) for arg in self.args)
@@ -115,6 +220,16 @@ class Method:
         d["returns"] = self.returns.dictify()
         if self.desc:
             d["desc"] = self.desc
+
+        if self.canonical:
+            d = {
+                "name": d["name"],
+                "desc": d.get("desc"),
+                "args": d["args"],
+                "returns": d["returns"],
+            }
+            if d["desc"] is None:
+                del d["desc"]
         return d
 
     @staticmethod
@@ -156,7 +271,7 @@ class Argument:
     """
 
     def __init__(
-        self, arg_type: str, name: str = None, desc: str = None
+        self, arg_type: str, name: str | None = None, desc: str | None = None
     ) -> None:
         if abi.is_abi_transaction_type(arg_type) or abi.is_abi_reference_type(
             arg_type
@@ -174,6 +289,27 @@ class Argument:
         return (
             self.name == o.name and self.type == o.type and self.desc == o.desc
         )
+
+    def __xor__(self, other: "Argument") -> dict | None:
+        assert isinstance(
+            other, Argument
+        ), f"cannot take diff of Argument with {type(other)}"
+
+        return (
+            None
+            if self == other
+            else {
+                "type": _differ(str(self.type), str(other.type)),
+                "name": _differ(self.name, other.name),
+                "desc": _differ(self.desc, other.desc),
+            }
+        )
+
+    def equivalent(self, other: "Argument") -> bool:
+        if not isinstance(other, Argument):
+            return False
+
+        return str(self.type) == str(other.type)
 
     def __str__(self) -> str:
         return str(self.type)
@@ -208,7 +344,7 @@ class Returns:
     # Represents a void return.
     VOID = "void"
 
-    def __init__(self, arg_type: str, desc: str = None) -> None:
+    def __init__(self, arg_type: str, desc: str | None = None) -> None:
         if arg_type == "void":
             self.type = self.VOID
         else:
@@ -220,6 +356,26 @@ class Returns:
         if not isinstance(o, Returns):
             return False
         return self.type == o.type and self.desc == o.desc
+
+    def __xor__(self, other: "Returns") -> dict | None:
+        assert isinstance(
+            other, Returns
+        ), f"cannot take diff of Returns with {type(other)}"
+
+        return (
+            None
+            if self == other
+            else {
+                "type": _differ(self.type, other.type),
+                "desc": _differ(self.desc, other.desc),
+            }
+        )
+
+    def equivalent(self, other: "Returns") -> bool:
+        if not isinstance(other, Returns):
+            return False
+
+        return str(self.type) == str(other.type)
 
     def __str__(self) -> str:
         return str(self.type)

@@ -1,3 +1,4 @@
+from copy import deepcopy
 import random
 import string
 import unittest
@@ -698,3 +699,155 @@ class TestABIInteraction(unittest.TestCase):
             [m.get_signature() for m in c.methods],
             ["add(uint64,uint64)void", "multiply(uint64,uint64)void"],
         )
+
+    def test_contract_differ(self):
+        calc_json = '{"name": "Calculator","desc":"This is an example contract","networks":{"wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=":{"appID":1234},"SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=":{"appID":5678}}, "methods": [{ "name": "add", "returns": {"type": "void"}, "args": [ { "name": "a", "type": "uint64", "desc": "..." },{ "name": "b", "type": "uint64", "desc": "..." } ] },{ "name": "multiply", "returns": {"type": "void"}, "args": [ { "name": "a", "type": "uint64", "desc": "..." },{ "name": "b", "type": "uint64", "desc": "..." } ] }]}'
+
+        calc_contract1 = Contract.from_json(calc_json)
+        calc_contract2 = deepcopy(calc_contract1)
+        d1 = calc_contract1.dictify()
+        d2 = calc_contract2.dictify()
+
+        self.assertNotEqual(id(calc_contract1), id(calc_contract2))
+        self.assertEqual(calc_contract1, calc_contract2)
+
+        diff = calc_contract1 ^ calc_contract2
+        self.assertIsNone(diff)
+        self.assertTrue(calc_contract1.equivalent(calc_contract2))
+
+        calc_contract2.name = "Not a Calculator"
+        self.assertNotEqual(calc_contract1, calc_contract2)
+        diff = calc_contract1 ^ calc_contract2
+        self.assertDictEqual(
+            {
+                "name": ("Calculator", "Not a Calculator"),
+                "desc": None,
+                "methods": None,
+                "networks": None,
+            },
+            diff,
+        )
+        self.assertTrue(calc_contract1.equivalent(calc_contract2))
+
+        calc_contract2.name = "Calculator"
+        self.assertEqual(calc_contract1, calc_contract2)
+
+        calc_contract2.desc = "marvelous calculator"
+        self.assertNotEqual(calc_contract1, calc_contract2)
+        diff = calc_contract1 ^ calc_contract2
+        self.assertDictEqual(
+            {
+                "name": None,
+                "desc": (
+                    "This is an example contract",
+                    "marvelous calculator",
+                ),
+                "methods": None,
+                "networks": None,
+            },
+            diff,
+        )
+        self.assertTrue(calc_contract1.equivalent(calc_contract2))
+
+        calc_contract2.desc = "This is an example contract"
+        self.assertEqual(calc_contract1, calc_contract2)
+        self.assertTrue(calc_contract1.equivalent(calc_contract2))
+
+        new_method = deepcopy(calc_contract2.methods[-1])
+        new_method.name += "2"
+        calc_contract2.methods.append(new_method)
+
+        self.assertNotEqual(calc_contract1, calc_contract2)
+        diff = calc_contract1 ^ calc_contract2
+        self.assertDictEqual(
+            {
+                "name": None,
+                "desc": None,
+                "methods": [None, None, (None, new_method.dictify())],
+                "networks": None,
+            },
+            diff,
+        )
+        self.assertFalse(calc_contract1.equivalent(calc_contract2))
+
+        del calc_contract2.methods[-1]
+        self.assertEqual(calc_contract1, calc_contract2)
+        self.assertTrue(calc_contract1.equivalent(calc_contract2))
+
+        new_method = deepcopy(calc_contract1.methods[-1])
+        new_method.name += "2"
+        calc_contract1.methods.append(new_method)
+
+        self.assertNotEqual(calc_contract1, calc_contract2)
+        diff = calc_contract1 ^ calc_contract2
+        self.assertDictEqual(
+            {
+                "name": None,
+                "desc": None,
+                "methods": [None, None, (new_method.dictify(), None)],
+                "networks": None,
+            },
+            diff,
+        )
+        self.assertFalse(calc_contract1.equivalent(calc_contract2))
+
+        del calc_contract1.methods[-1]
+        self.assertEqual(calc_contract1, calc_contract2)
+        self.assertTrue(calc_contract1.equivalent(calc_contract2))
+
+        add2 = calc_contract2.methods[0]
+        add2.args[0].type.bit_size = 8
+
+        self.assertNotEqual(calc_contract1, calc_contract2)
+        diff = calc_contract1 ^ calc_contract2
+        self.assertDictEqual(
+            {
+                "name": None,
+                "desc": None,
+                "methods": [
+                    {
+                        "name": "add",
+                        "desc": None,
+                        "args": [
+                            {
+                                "type": ("uint64", "uint8"),
+                                "name": None,
+                                "desc": None,
+                            },
+                            None,
+                        ],
+                        "returns": None,
+                        "txn_calls": None,
+                    },
+                    None,
+                ],
+                "networks": None,
+            },
+            diff,
+        )
+        self.assertFalse(calc_contract1.equivalent(calc_contract2))
+
+        add2.args[0].type.bit_size = 64
+        self.assertEqual(calc_contract1, calc_contract2)
+        self.assertTrue(calc_contract1.equivalent(calc_contract2))
+
+        calc_contract2.networks[
+            "wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8="
+        ].app_id = 1337
+        self.assertNotEqual(calc_contract1, calc_contract2)
+        diff = calc_contract1 ^ calc_contract2
+        self.assertDictEqual(
+            {
+                "name": None,
+                "desc": None,
+                "methods": None,
+                "networks": {
+                    "wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=": {
+                        "appID": (1234, 1337),
+                    },
+                    "SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=": None,
+                },
+            },
+            diff,
+        )
+        self.assertFalse(calc_contract1.equivalent(calc_contract2))
