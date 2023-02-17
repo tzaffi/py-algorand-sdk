@@ -22,9 +22,9 @@ class ArrayStaticType(ABIType):
     """
 
     def __init__(self, arg_type: ABIType, array_len: int) -> None:
-        if array_len < 1:
+        if array_len < 0:
             raise error.ABITypeError(
-                "static array length must be a positive integer: {}".format(
+                "static array length {} must be a non-negative integer".format(
                     array_len
                 )
             )
@@ -81,9 +81,7 @@ class ArrayStaticType(ABIType):
             or isinstance(value_array, bytearray)
         ) and not isinstance(self.child_type, ByteType):
             raise error.ABIEncodingError(
-                "cannot pass in bytes when the type of the array is not ByteType: {}".format(
-                    value_array
-                )
+                f"cannot pass in bytes when the type of the array is not ByteType: {value_array!r}"
             )
         converted_tuple = self._to_tuple_type()
         return converted_tuple.encode(value_array)

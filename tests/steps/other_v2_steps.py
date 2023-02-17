@@ -7,15 +7,19 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 import parse
+from behave import register_type  # pylint: disable=no-name-in-module
+from behave import given, step, then, when
+from glom import glom
+
 from algosdk import (
     dryrun_results,
     encoding,
     error,
     mnemonic,
     source_map,
+    transaction,
 )
 from algosdk.error import AlgodHTTPError
-from algosdk.future import transaction
 from algosdk.testing.dryrun import DryrunTestCaseMixin
 from algosdk.v2client import *
 from algosdk.v2client.models import (
@@ -24,10 +28,7 @@ from algosdk.v2client.models import (
     DryrunRequest,
     DryrunSource,
 )
-from behave import register_type  # pylint: disable=no-name-in-module
-from behave import given, step, then, when
-from glom import glom
-from tests.steps.steps import algod_port
+from tests.steps.steps import algod_port, indexer_port
 from tests.steps.steps import token as daemon_token
 
 
@@ -39,9 +40,9 @@ def parse_string(text):
 register_type(MaybeString=parse_string)
 
 
-@parse.with_pattern(r"true|false")
+@parse.with_pattern(r"true|false|")
 def parse_bool(value):
-    if value not in ("true", "false"):
+    if value not in ("true", "false", ""):
         raise ValueError("Unknown value for include_all: {}".format(value))
     return value == "true"
 
@@ -623,9 +624,19 @@ def parse_txns_by_addr(context, roundNum, length, idx, sender):
         assert context.response["transactions"][int(idx)]["sender"] == sender
 
 
-@when("we make a Lookup Block call against round {block}")
+@when(
+    'we make a Lookup Block call against round {block:d} and header "{headerOnly:MaybeBool}"'
+)
+def lookup_block(context, block, headerOnly):
+    print("Header only = " + str(headerOnly))
+    context.response = context.icl.block_info(
+        block=block, header_only=headerOnly
+    )
+
+
+@when("we make a Lookup Block call against round {block:d}")
 def lookup_block(context, block):
-    context.response = context.icl.block_info(int(block))
+    context.response = context.icl.block_info(block)
 
 
 @when("we make any LookupBlock call")
@@ -1006,7 +1017,7 @@ def compare_to_base64_golden(context, golden):
 @then("the decoded transaction should equal the original")
 def compare_to_original(context):
     encoded = encoding.msgpack_encode(context.signed_transaction)
-    decoded = encoding.future_msgpack_decode(encoded)
+    decoded = encoding.msgpack_decode(encoded)
     assert decoded.transaction == context.transaction
 
 
@@ -1022,6 +1033,12 @@ def algod_v2_client_at_host_port_and_token(context, host, port, token):
 def algod_v2_client(context):
     algod_address = "http://localhost" + ":" + str(algod_port)
     context.app_acl = algod.AlgodClient(daemon_token, algod_address)
+
+
+@given("an indexer v2 client")
+def indexer_v2_client(context):
+    indexer_address = "http://localhost" + ":" + str(indexer_port)
+    context.app_icl = indexer.IndexerClient("", indexer_address)
 
 
 @when('I compile a teal program "{program}"')
@@ -1066,7 +1083,7 @@ def dryrun_step(context, kind, program):
     sources = []
 
     if kind == "compiled":
-        lsig = transaction.LogicSig(data)
+        lsig = transaction.LogicSigAccount(bytes(data))
         txns = [transaction.LogicSigTransaction(txn, lsig)]
     elif kind == "source":
         txns = [transaction.SignedTransaction(txn, None)]
@@ -1392,3 +1409,8 @@ def transaction_proof(context, round, txid, hashtype):
     context.response = context.acl.transaction_proof(
         round, txid, hashtype, "msgpack"
     )
+
+
+@when("we make a Lookup Block Hash call against round {round}")
+def get_block_hash(context, round):
+    context.response = context.acl.get_block_hash(round)

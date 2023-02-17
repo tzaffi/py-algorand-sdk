@@ -1,5 +1,57 @@
 # Changelog
 
+# v2.0.0
+
+## What's Changed
+
+### Breaking Changes
+
+* Remove v1 algod API (`algosdk/algod.py`) due to API end-of-life (2022-12-01).  Instead, use v2 algod API (`algosdk/v2client/algod.py`).
+* Remove `algosdk.future` package.  Move package contents to `algosdk`.
+* Remove `encoding.future_msgpack_decode` method in favor of `encoding.msgpack_decode` method.
+* Remove `cost` field in `DryrunTxnResult` in favor of 2 fields:  `budget-added` and `budget-consumed`.  `cost` can be derived by `budget-consumed - budget-added`.
+* Remove `mnemonic.to_public_key` in favor of `account.address_from_private_key`.
+* Remove logicsig templates, `algosdk/data/langspec.json` and all methods in `logic` depending on it.
+
+# v1.20.2
+
+## What's Changed
+### Bugfixes
+* Bug-Fix: encode ABI string with non-ASCII characters by @ahangsu in https://github.com/algorand/py-algorand-sdk/pull/402
+### Enhancements
+* Tests: Migrate v1 algod dependencies to v2 in cucumber tests by @algochoi in https://github.com/algorand/py-algorand-sdk/pull/400
+* Enhancement: allowing zero length static array by @ahangsu in https://github.com/algorand/py-algorand-sdk/pull/401
+* README: Delete Travis CI Badge  by @algochoi in https://github.com/algorand/py-algorand-sdk/pull/404
+* examples: Migrate v1 algod usage to v2 algod by @algochoi in https://github.com/algorand/py-algorand-sdk/pull/403
+
+**Full Changelog**: https://github.com/algorand/py-algorand-sdk/compare/v1.20.1...v1.20.2
+
+# v1.20.1
+
+## What's Changed
+### Bugfixes
+* Bug-fix: Implement `TransactionRejectedError` by @jdtzmn in https://github.com/algorand/py-algorand-sdk/pull/396
+* Decoding: Fix roundtrip encode/decode tests for transactions by @algochoi in https://github.com/algorand/py-algorand-sdk/pull/398
+
+**Full Changelog**: https://github.com/algorand/py-algorand-sdk/compare/v1.20.0...v1.20.1
+
+# v1.20.0
+
+## What's Changed
+### New Features
+* Boxes: Add support for Boxes by @algochoi in https://github.com/algorand/py-algorand-sdk/pull/348
+* `class StateSchema`'s method `undictify()` now returns a `StateSchema` object instead of a python `dict`
+
+**Full Changelog**: https://github.com/algorand/py-algorand-sdk/compare/v1.19.0...v1.20.0
+
+# v1.19.0
+
+## What's Changed
+### Enhancements
+* REST API: Add algod block hash endpoint, add indexer block header-only param. by @winder in https://github.com/algorand/py-algorand-sdk/pull/390
+
+**Full Changelog**: https://github.com/algorand/py-algorand-sdk/compare/v1.18.0...v1.19.0
+
 # v1.18.0
 ### Enhancements
 * Deprecation: Add deprecation warnings on v1 algod API and old transaction format by @algochoi in https://github.com/algorand/py-algorand-sdk/pull/381

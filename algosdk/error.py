@@ -140,16 +140,6 @@ class EmptyAddressError(Exception):
         )
 
 
-class WrongContractError(Exception):
-    def __init__(self, contract_type):
-        Exception.__init__(
-            self,
-            "Wrong contract provided; a "
-            + contract_type
-            + " contract is needed",
-        )
-
-
 class OverspecifiedRoundError(Exception):
     def __init__(self, contract_type):
         Exception.__init__(
@@ -178,14 +168,6 @@ class KeyregOnlineTxnInitError(Exception):
         Exception.__init__(self, attr + " should not be None")
 
 
-class TemplateInputError(Exception):
-    pass
-
-
-class TemplateError(Exception):
-    pass
-
-
 class KMDHTTPError(Exception):
     pass
 
@@ -209,6 +191,10 @@ class ConfirmationTimeoutError(Exception):
     pass
 
 
+class TransactionRejectedError(Exception):
+    pass
+
+
 class ABITypeError(Exception):
     def __init__(self, msg):
         super().__init__(msg)
@@ -220,6 +206,11 @@ class ABIEncodingError(Exception):
 
 
 class AtomicTransactionComposerError(Exception):
+    def __init__(self, msg):
+        super().__init__(msg)
+
+
+class InvalidForeignIndexError(Exception):
     def __init__(self, msg):
         super().__init__(msg)
 

@@ -1,11 +1,11 @@
 import base64
-import warnings
 from collections import OrderedDict
+from typing import Union
 
 import msgpack
 from Cryptodome.Hash import SHA512
 
-from . import auction, constants, error, future, transaction
+from algosdk import auction, constants, error, transaction
 
 
 def msgpack_encode(obj):
@@ -55,51 +55,8 @@ def _sort_dict(d):
     return od
 
 
-def future_msgpack_decode(enc):
-    """
-    Decode a msgpack encoded object from a string.
-
-    Args:
-        enc (str): string to be decoded
-
-    Returns:
-        Transaction, SignedTransaction, Multisig, Bid, or SignedBid:\
-            decoded object
-    """
-    decoded = enc
-    if not isinstance(enc, dict):
-        decoded = msgpack.unpackb(base64.b64decode(enc), raw=False)
-    if "type" in decoded:
-        return future.transaction.Transaction.undictify(decoded)
-    if "l" in decoded:
-        return future.transaction.LogicSig.undictify(decoded)
-    if "msig" in decoded:
-        return future.transaction.MultisigTransaction.undictify(decoded)
-    if "lsig" in decoded:
-        if "txn" in decoded:
-            return future.transaction.LogicSigTransaction.undictify(decoded)
-        return future.transaction.LogicSigAccount.undictify(decoded)
-    if "sig" in decoded:
-        return future.transaction.SignedTransaction.undictify(decoded)
-    if "txn" in decoded:
-        return future.transaction.Transaction.undictify(decoded["txn"])
-    if "subsig" in decoded:
-        return future.transaction.Multisig.undictify(decoded)
-    if "txlist" in decoded:
-        return future.transaction.TxGroup.undictify(decoded)
-    if "t" in decoded:
-        return auction.NoteField.undictify(decoded)
-    if "bid" in decoded:
-        return auction.SignedBid.undictify(decoded)
-    if "auc" in decoded:
-        return auction.Bid.undictify(decoded)
-
-
 def msgpack_decode(enc):
     """
-    NOTE: This method is deprecated:
-    Please use `future_msgpack_decode` instead.
-
     Decode a msgpack encoded object from a string.
 
     Args:
@@ -109,11 +66,6 @@ def msgpack_decode(enc):
         Transaction, SignedTransaction, Multisig, Bid, or SignedBid:\
             decoded object
     """
-    warnings.warn(
-        "`msgpack_decode` is being deprecated. "
-        "Please use `future_msgpack_decode` instead.",
-        DeprecationWarning,
-    )
     decoded = enc
     if not isinstance(enc, dict):
         decoded = msgpack.unpackb(base64.b64decode(enc), raw=False)
@@ -124,7 +76,9 @@ def msgpack_decode(enc):
     if "msig" in decoded:
         return transaction.MultisigTransaction.undictify(decoded)
     if "lsig" in decoded:
-        return transaction.LogicSigTransaction.undictify(decoded)
+        if "txn" in decoded:
+            return transaction.LogicSigTransaction.undictify(decoded)
+        return transaction.LogicSigAccount.undictify(decoded)
     if "sig" in decoded:
         return transaction.SignedTransaction.undictify(decoded)
     if "txn" in decoded:
@@ -246,3 +200,17 @@ def checksum(data):
     chksum = SHA512.new(truncate="256")
     chksum.update(data)
     return chksum.digest()
+
+
+def encode_as_bytes(
+    e: Union[bytes, bytearray, str, int]
+) -> Union[bytes, bytearray]:
+    """Confirm or coerce element to bytes."""
+    if isinstance(e, (bytes, bytearray)):
+        return e
+    if isinstance(e, str):
+        return e.encode()
+    if isinstance(e, int):
+        # Uses 8 bytes, big endian to match TEAL's btoi
+        return e.to_bytes(8, "big")  # raises for negative or too big
+    raise TypeError("{} is not bytes, bytearray, str, or int".format(e))

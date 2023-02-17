@@ -4,7 +4,6 @@ import urllib.error
 import json
 import base64
 from .. import error
-from .. import encoding
 from .. import constants
 from .algod import _specify_round_string
 
@@ -211,20 +210,26 @@ class IndexerClient:
             query["include-all"] = include_all
         return self.indexer_request("GET", req, query, **kwargs)
 
-    def block_info(self, block=None, round_num=None, **kwargs):
+    def block_info(
+        self, block=None, round_num=None, header_only=None, **kwargs
+    ):
         """
         Get the block for the given round.
 
         Args:
             block (int, optional): block number
             round_num (int, optional): alias for block; specify one of these
+            header_only (bool, optional):
         """
-        req = "/blocks/"
         if block is None and round_num is None:
             raise error.UnderspecifiedRoundError
         req = "/blocks/" + _specify_round_string(block, round_num)
 
-        return self.indexer_request("GET", req, **kwargs)
+        query = dict()
+        if header_only:
+            query["header-only"] = "true"
+
+        return self.indexer_request("GET", req, query, **kwargs)
 
     def account_info(
         self,
@@ -925,6 +930,48 @@ class IndexerClient:
             query["txid"] = txid
 
         return self.indexer_request("GET", req, query, **kwargs)
+
+    def application_box_by_name(
+        self, application_id: int, box_name: bytes, **kwargs
+    ):
+        """
+        Return the value of an application's box.
+
+        NOTE: box values are returned as base64-encoded strings.
+
+        Args:
+            application_id (int): application index
+            box_name (bytes): The name (key) of the box.
+        """
+        encoded_box = base64.b64encode(box_name).decode()
+        box_name_encoded = "b64:" + encoded_box
+        req = "/applications/" + str(application_id) + "/box"
+        params = {"name": box_name_encoded}
+
+        return self.indexer_request("GET", req, params, **kwargs)
+
+    def application_boxes(
+        self, application_id: int, limit: int = 0, next_page=None, **kwargs
+    ):
+        """
+        Return a list of all the application's boxes.
+
+        NOTE: box names are returned as base64-encoded strings.
+
+        Args:
+            application_id (int): The ID of the application to look up.
+            limit (int, optional): Max number of box names to return.
+                If max is not set, or max == 0, returns all box-names up to queried indexer's `defaultBoxesLimit`.
+            next_page (string, optional): used for pagination
+        """
+        req = "/applications/" + str(application_id) + "/boxes"
+        params = {}
+        if limit:
+            params["limit"] = limit
+        if next_page:
+            params["next"] = next_page
+
+        return self.indexer_request("GET", req, params, **kwargs)
 
 
 def _specify_round(query, block, round_num):
